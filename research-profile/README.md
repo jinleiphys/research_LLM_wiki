@@ -47,6 +47,20 @@ Failures are deliberately first-class. Most researchers never write down what di
 
 The skill defines mini-schemas for each entry type (project, paper, idea, failure, method, collaborator, talk, review, funding). See SKILL.md or AGENTS.md for full schema details.
 
+## What v2 added
+
+Schema v2 (current) builds tag-driven indexing on top of v1's hand-curated structure. The four real problems with v1 were: index.md degraded into an unreadable list past ~50 entries; `related: []` frontmatter was always empty (forgetfulness); cross-references hid in prose where machines couldn't query them; and `profile.md` sorted by "recent publications" but real questions are "what did I do on topic X?". v2 fixes them with:
+
+- **Controlled vocabulary** in `<wiki>/CLAUDE.md` (six axes: methods / observables / codes / topics / systems / collaborators) with aliases and parent relationships. Tag drift is the silent killer at scale; the vocabulary file is the contract.
+- **Tag fields in frontmatter** on every page (papers, ideas, failures, methods, etc.) — same axes, same vocab.
+- **`update-index` operation** — auto-generates `<wiki>/index/by-<axis>/<tag>.md` pages by scanning all frontmatter. Each page has a manual preamble (motivation, current state) above an AUTO block listing papers + ideas + failures + methods carrying that tag. Topic-index pages doubly serve as **research-line pages**.
+- **Schema v2 paper format** — drops sections reconstructable from the abstract (Title and authors → frontmatter, Status timeline → frontmatter dates), adds mandatory user-only sections (My contribution in CRediT format, Code/data location with server paths, Lineage prose, Key numbers, What I'd do differently now). A `.private.md` companion is always paired for embargoed material (reviewer reports, response drafts).
+- **AUTO-marker `profile.md` sections** — `update-profile` rewrites only the marked blocks; manual sections (Working preferences, Compute, Skills) are never touched. Active research lines are derived from tag activity, not hand-curated.
+- **`migrate` operation** — interactive walk through v1 pages, prompting for each missing v2 field with vocabulary-controlled tag pickers.
+- **`log paper` own/read split** — own papers take the v2 schema; read papers hand off to literature-wiki.
+
+If you have a v1 wiki, run `migrate` once. If you are starting fresh, `init` ships v2 directly.
+
 ## File layout
 
 ```
@@ -55,7 +69,8 @@ research-profile/
 ├── AGENTS.md               # canonical body — Codex CLI entry (no frontmatter, Codex-flavored)
 ├── README.md               # this file
 └── templates/
-    ├── profile.md          # starter template for the auto-loaded one-pager
+    ├── profile.md          # starter template for the auto-loaded one-pager (with AUTO markers)
+    ├── CLAUDE.md           # vocabulary starter — six axes with example entries
     ├── .gitignore          # privacy-default gitignore for the wiki
     └── pre-commit-hook.sh  # optional Git pre-commit guard against committing private/embargoed files
 ```

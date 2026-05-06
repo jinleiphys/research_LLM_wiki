@@ -1,139 +1,246 @@
-# Literature Wiki — Codex CLI entry
+# Literature Wiki — Codex CLI entry (Schema v2)
 
-This is the **Codex CLI** entry for the literature-wiki skill. The Claude Code entry is `SKILL.md` next to this file. The two contain the same operational protocol; this file is self-contained because **Codex does not support markdown imports** (open issue [openai/codex#17401](https://github.com/openai/codex/issues/17401)) — the body must be inlined.
+This is the **Codex CLI** entry for the literature-wiki skill. The Claude Code entry is `SKILL.md` next to this file. The two contain the same operational protocol; this file is self-contained because **Codex does not support markdown imports** ([openai/codex#17401](https://github.com/openai/codex/issues/17401)). If you edit one, mirror to the other.
 
-> **Maintenance note:** if you edit SKILL.md, mirror the change here. Both are canonical for their respective harness. The READMEs flag this for contributors.
+**Schema v2 (current)** introduces controlled vocabulary on source frontmatter and an `update-index` operation that augments concept pages with auto-generated "Papers using this" appendices.
 
 ## When to act
 
-Activate this protocol when the user says any of:
+Activate when the user says any of:
 
 - "加入文献wiki" / "把这篇加进去" / "我读完这篇了" / "归档这篇" / "更新文献库"
 - "我之前看过谁的 X 工作" / "我的 wiki 里有没有 X"
 - "ingest this paper" / "update the wiki" / "what does my wiki say about X"
-- "add this to my literature wiki" / "sync my notes with literature-search results"
+- "add to my literature wiki" / "lint the wiki"
 
-**Do NOT activate** for fresh literature discovery, reference recommendations, DOI/BibTeX lookup, or "find me a paper on X" unless the user explicitly says "add to wiki", "query my wiki", "update my notes", or "lint the wiki". For discovery, delegate to a literature-search tool if installed; this skill files what the user has read, it does not fetch new papers.
+**Do NOT activate** for fresh literature discovery, reference recommendations, or DOI/BibTeX lookup unless the user explicitly says "add to wiki", "query my wiki", or "lint the wiki". Delegate to a literature-search tool for discovery; this skill files what the user has read, not what they want to find.
 
 ## Why this skill exists
 
-Most LLM-document workflows look like RAG: every question re-discovers knowledge from raw PDFs. Nothing accumulates. For a researcher reading dozens of papers a year on related topics, this is wasted compounding.
+Most LLM-document workflows are RAG: every question re-discovers knowledge from raw PDFs. Nothing accumulates. For a researcher reading dozens of papers a year on related topics, this is wasted compounding.
 
-This skill maintains a **persistent, structured wiki** of markdown files. When the user reads a new paper, the skill reads it, extracts what matters, and integrates it into existing entity/method/system pages — updating cross-references, flagging where new data contradicts old claims, strengthening the evolving synthesis. The wiki is the compiled artifact; the raw PDFs sit beside it but are not the primary lookup layer.
+This skill maintains a persistent, structured wiki of markdown files. New paper → skill reads it, extracts what matters, integrates into existing entity / method / system / observable pages — updating cross-references, flagging contradictions, strengthening synthesis. Wiki is the compiled artifact; raw PDFs sit beside it but are not the lookup layer.
 
-The user curates and asks. The skill writes and maintains.
+User curates and asks. Skill writes and maintains.
 
-The pattern is field-independent. It works for nuclear physics, condensed matter, ML, biology, history, law — any domain where the user accumulates papers/articles over time.
+Field-independent. Default categories suit physical-science research; users in other fields rename in `<wiki>/AGENTS.md` (or `CLAUDE.md`).
 
 ## Wiki location
 
-**Resolution order on every invocation:**
+Resolution order:
 
-1. `LITERATURE_WIKI_PATH` environment variable, if set.
-2. The path inside `~/.literature-wiki-path` if that file exists (single line, absolute path).
+1. `LITERATURE_WIKI_PATH` env var.
+2. `~/.literature-wiki-path` (single line, absolute).
 3. Default: `~/research-wiki/`.
 
-If the wiki directory does not exist, ask before creating.
+Ask before creating if absent.
 
 ## Wiki layout
 
 ```
 <wiki>/
-├── CLAUDE.md / AGENTS.md      # per-wiki schema mirror; user puts personal style here
-├── index.md                   # content index, organized by category
-├── log.md                     # chronological log of ingests/queries/lints
+├── CLAUDE.md / AGENTS.md      # ⭐ vocabulary + style overrides
+├── index.md                   # navigation hub
+├── log.md
 ├── raw/                       # source PDFs/markdown, IMMUTABLE
-│   └── assets/                # downloaded figures
-├── sources/                   # one page per paper, summary + key numbers
-├── entities/                  # authors, groups, experiments, code packages
-├── methods/                   # method-level pages
-├── systems/                   # system-level pages
-├── observables/               # quantity-level pages
-├── debates/                   # explicit pages: who disagrees with whom and why
-└── synthesis/                 # cross-cutting themes, working theses
+│   └── assets/
+├── sources/                   # one page per paper
+├── entities/                  # author / group / experiment / code-package pages (manual + AUTO appendix)
+├── methods/                   # method-level pages (manual + AUTO appendix)
+├── systems/                   # system-level pages (manual + AUTO appendix)
+├── observables/               # quantity-level pages (manual + AUTO appendix)
+├── debates/                   # who-disagrees-with-whom
+└── synthesis/                 # cross-cutting themes
 ```
 
-Default category names suit physical-science research. Other fields should rename:
+In v2, every concept page (`entities/`, `methods/`, `systems/`, `observables/`) has the structure:
 
-| Field | Suggested categories |
+```markdown
+# <Canonical name from vocab>
+
+(manual prose: definition, key references, ongoing debates)
+
+<!-- AUTO:BEGIN -->
+## Papers using this <axis> (N)
+- [YYYY] Author et al. — one-line claim. → [[../sources/<paper-id>]]
+
+## Cross-tags
+methods=[…], systems=[…], observables=[…]
+<!-- AUTO:END -->
+```
+
+Manual section is your encyclopedic content. AUTO block is regenerated by `update-index`.
+
+## Controlled vocabulary (v2 contract)
+
+All tag values come from a controlled vocabulary in `<wiki>/CLAUDE.md` (or `<wiki>/AGENTS.md`). Four axes:
+
+| Axis | What it tracks |
 |---|---|
-| Physics / chemistry | entities, methods, systems, observables |
-| ML research | datasets, methods, models, benchmarks |
-| Biology | organisms, mechanisms, pathways, assays |
-| History | actors, events, sources, debates |
-| Law | parties, doctrines, cases, statutes |
+| `entities` | authors, groups, experiments, code packages from the literature |
+| `methods` | analytical/numerical/experimental methods used by source papers |
+| `systems` | specific reactions / nuclei / datasets the source studies |
+| `observables` | physical or computational quantities computed/measured |
 
-Document customization in `<wiki>/AGENTS.md` (Codex) or `<wiki>/CLAUDE.md` (Claude Code).
+Narrower than research-profile's six axes (no `topics`, `codes`, `collaborators` — those are user-specific). When the user runs both skills, **methods/systems/observables slugs should match across both wikis**.
 
-Frontmatter on every wiki page:
+### Vocabulary file format
+
+```yaml
+vocabulary:
+  methods:
+    cdcc:
+      canonical: "Continuum-Discretized Coupled Channels"
+      aliases: [CDCC, "continuum-discretized"]
+    iav-cdcc:
+      canonical: "Ichimura-Austern-Vincent CDCC"
+      aliases: [IAV-CDCC]
+      parent: cdcc
+  entities:
+    moro-group:
+      canonical: "A.M. Moro group, Universidad de Sevilla"
+      aliases: ["Moro group", "Sevilla group"]
+```
+
+`canonical` required. `aliases` case-insensitive multi-language. `parent` propagates to indices.
+
+### Vocabulary discipline
+
+When ingesting:
+1. Look up tags against vocabulary (case-insensitive, alias-aware).
+2. Known: use canonical slug.
+3. Unknown: STOP. Propose vocab diff with definition + aliases. Apply only after explicit user approval.
+
+Reserved `uncategorized` slug per axis; lint warns at >30%.
+
+## Source page frontmatter
 
 ```yaml
 ---
-type: source | entity | method | system | observable | debate | synthesis
-tags: [domain-tag-1, domain-tag-2]
-sources: [paper-id-1, paper-id-2]
+type: source
+created: YYYY-MM-DD
 last_updated: YYYY-MM-DD
+title: "..."
+authors: [list, lead first]
+year: YYYY
+venue: "..."
+doi: 10.xxx/xxx
+arxiv: ...
+
+methods: [iav-cdcc, cdcc]
+systems: ["d+93Nb"]
+observables: [breakup-cs]
+entities: [moro-group]
+
+contradicts: [[sources/<other>]]
+extends: [[sources/<other>]]
+research_profile_links: [[../research-wiki-personal/papers/published/<slug>]]
 ---
 ```
 
-## Three operations
+Concept page frontmatter is simpler: `type`, `slug`, `created`, `last_updated`, `last_indexed`.
+
+## Operations
 
 ### 1. Ingest
 
-Trigger: user drops a paper into `<wiki>/raw/` (or hands a DOI/arXiv ID/URL) and says "归档" / "把这篇加进去" / "ingest".
+Trigger: paper dropped into `<wiki>/raw/` or DOI/arXiv ID, with "归档" / "ingest" / "把这篇加进去".
 
-Flow:
-1. **Read the source.** If only an identifier is given, fetch via the user's literature-search tool first (do not skip — anti-hallucination still applies). If no such tool, fetch via Codex's web access if available.
-2. **Discuss with the user.** Surface 3–5 key takeaways and ask which to emphasize before filing. Non-skippable on first ingest of a session; brief summary suffices on later ones.
-3. **Create `sources/<paper-id>.md`** with: bibliographic header, abstract in the user's words, key claims with page/section refs, key numbers, figures of interest, and links to related wiki pages.
-4. **Update relevant pages** across `entities/`, `methods/`, `systems/`, `observables/`, `debates/`. A single paper typically touches 5–15 pages (Karpathy's gist reports 10–15 for general articles; scientific papers tend tighter). Add new pages where needed; do not let mentioned-but-undefined entities drift orphan.
-5. **Update `index.md`** with a one-line summary of the new source.
-6. **Append to `log.md`**: `## [YYYY-MM-DD] ingest | <paper-id> | <one-line takeaway>`.
-7. **Confirm** which pages changed and where contradictions surfaced.
+1. **Read source.** If only an identifier given, fetch via the user's literature-search tool first. Otherwise via Codex web access.
+2. **Discuss.** Surface 3–5 takeaways, ask which to emphasize. Non-skippable on first session ingest.
+3. **Vocabulary check.** For each method/system/observable/entity invoked: vocab lookup. Unknown → propose vocab diff first, await approval.
+4. **Create `sources/<paper-id>.md`** with full v2 frontmatter, bibliographic header, abstract in user's words, key claims with section refs, key numbers, figures (downloaded into `raw/assets/`), wikilinks to concept pages.
+5. **Update or create concept pages** for each tag value. Manual prose updated; AUTO block regenerated by step 7.
+6. **Update `index.md`** with one-line summary.
+7. **Trigger `update-index`** — regenerate AUTO blocks on touched concept pages.
+8. **Append to `log.md`**: `## [YYYY-MM-DD] ingest | <paper-id> | <takeaway>`.
+9. **Confirm** changed pages and contradictions. A single paper typically touches 5–15 pages.
 
 ### 2. Query
 
-Trigger: user asks a question wanting wiki synthesis rather than fresh literature search.
+Trigger: user wants synthesis across wiki rather than fresh search.
 
-Flow:
-1. Read `index.md` to find candidate pages.
-2. Drill into 3–10 relevant pages with file:line citations.
-3. Synthesize. Flag what is supported, what is contradicted, where the wiki has gaps.
-4. **If non-trivial, offer to file the answer** as a new page in `synthesis/` or `debates/`. Good answers should compound.
+1. Read `index.md` to find candidate concept pages.
+2. Drill into 3–10 pages with file:line citations.
+3. Synthesize, flag supported / contradicted / gaps.
+4. **Offer to file the answer** as a new `synthesis/` or `debates/` page if non-trivial. Compounding.
 
 ### 3. Lint
 
-Trigger: explicit request, or after every ~10 ingests, suggest one.
+Trigger: explicit, or after every ~10 ingests.
 
-Check for:
-- **Contradictions** between pages — flag with `[CONTRADICTS sources/X.md]` markers and create a `debates/` entry.
-- **Stale claims** — pages that cite old sources where newer ones supersede.
-- **Orphans** — pages no other page links to.
-- **Missing entities** — concepts mentioned across multiple sources but lacking their own page.
-- **Frontmatter drift** — wrong type tags, missing dates.
-- **Suggested next reads** — gaps the wiki cannot answer; surface as questions for the next literature-search run.
+Check: contradictions between sources, stale claims, orphan sources (no axis tags), missing concept pages, frontmatter drift, AUTO-block hand-edits, cross-link validity.
 
-Output: a markdown report. Apply fixes only after the user reviews.
+Output: markdown report. Apply only after user reviews.
+
+### 4. update-index (NEW in v2)
+
+Auto after every `ingest`/`lint`. Idempotent.
+
+1. Walk `sources/*.md`, read frontmatter only.
+2. Build axis → tag → sources map. Apply `parent:` propagation.
+3. For each referenced concept page (`<axis>/<slug>.md`): ensure exists, locate AUTO markers, regenerate AUTO block:
+   ```markdown
+   <!-- AUTO:BEGIN -->
+   ## Papers using this <axis> (N)
+   - [YYYY] First-author et al., Venue — one-sentence claim. → [[../sources/<paper-id>]]
+
+   ## Cross-tags
+   methods: […], systems: […], observables: […]
+
+   ## Last indexed: YYYY-MM-DD
+   <!-- AUTO:END -->
+   ```
+4. Concept pages with no remaining sources: mark `## Status: orphaned` in manual section header (do not delete; prose may still have value).
+5. Report changes.
+
+### 5. migrate (NEW in v2)
+
+For pre-v2 wikis:
+
+1. Walk `sources/*.md`, identify missing v2 fields (tag axes, cross-references). Propose from wikilinks; user confirms.
+2. Walk concept pages, insert `<!-- AUTO:BEGIN/END -->` markers if absent (at bottom; existing prose preserved above).
+3. Run `update-index` once.
+4. Append migration log.
+
+Interactive and slow on large wikis — by design.
 
 ## Working principles
 
-- **The user curates, the skill writes.** Pages contain only content from real sources or the user's explicit input.
-- **Quote with provenance.** Every non-trivial claim links back to a `sources/` page or external citation.
-- **Lean over comprehensive.** 80% covered and trusted beats 100% covered and unread.
-- **Use Obsidian-style `[[wikilinks]]`** for internal references; they survive renames.
-- **Read the wiki's `AGENTS.md` / `CLAUDE.md` first** for personal style overrides.
+- **The user curates, the skill writes.**
+- **Quote with provenance.** Every non-trivial claim links back.
+- **Lean over comprehensive.**
+- **Use `[[wikilinks]]`.**
+- **Read `<wiki>/AGENTS.md` first** for vocabulary and style.
+- **Controlled vocabulary is a contract.**
+- **Frontmatter drives indices, body holds narrative.**
 
-## Companion skills
+## Cross-skill hand-off
 
-- A **literature-search** skill for database fetches with anti-hallucination protocol. Output of literature-search is input here.
-- A **research-profile** skill — your *personal* research record; cross-link your own papers into this field-level wiki.
-- Any **paper-writing** skill — should query this wiki for related-work sections.
+### To/from research-profile (user's own portfolio)
+
+- Shared vocabulary slugs for `methods`, `systems`, `observables`. Recommended: single `~/research-vocabulary.yml`, both wikis' CLAUDE.md/AGENTS.md `include:` it.
+- `research_profile_links:` on source frontmatter when user has own paper responding to / extending / contradicting the source.
+- Reverse: research-profile pages add `literature: [[../research-wiki/sources/<paper>]]`.
+
+### To/from literature-search
+
+literature-search skill is the source of *new* papers (DB fetcher with anti-hallucination). Output → input here via `<wiki>/raw/`.
+
+### To/from paper-writing skills
+
+Paper-writing skills query this wiki for related-work sections. Query returns `[[wikilinks]]` that paper-writing resolves to verified BibTeX.
 
 ## Codex install notes
 
-- Append this file's contents (or a relevant subset) to `~/.codex/AGENTS.md` for global use, or to your project's AGENTS.md for project-local use. Codex auto-loads AGENTS.md from project root walking down to cwd.
-- The default `project_doc_max_bytes` is 32 KiB combined. If you also have other AGENTS.md content, raise it in `~/.codex/config.toml`:
+- **Per-project install (recommended):** `cat /path/to/skills/literature-wiki/AGENTS.md >> <project>/AGENTS.md`. Loads in that project.
+- **Global install:** append to `~/.codex/AGENTS.md` (NOT if you have research-profile auto-load taking that file via symlink).
+- The default `project_doc_max_bytes` is 32 KiB combined. Raise in `~/.codex/config.toml` if needed:
   ```toml
   project_doc_max_bytes = 65536
   ```
-- Codex does not have a "trigger" mechanism the way Claude Code skills do. The "When to act" section above is read by Codex on every session and shapes its behavior; the user should still invoke this protocol explicitly when intent is ambiguous.
+- Codex has no skill-trigger mechanism. The "When to act" rules above shape Codex behavior in absence of slash-commands.
+
+## Templates shipped
+
+- `templates/CLAUDE.md` — vocabulary starter with four axes (entities/methods/systems/observables) and example entries. Copy to `<wiki>/CLAUDE.md` on first use.

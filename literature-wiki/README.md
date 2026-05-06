@@ -24,6 +24,19 @@ This skill: knowledge is compiled once into a structured wiki, then *kept curren
 
 It scales well at moderate size (~hundreds of sources, low thousands of pages) without embeddings or vector DBs — `index.md` plus markdown grep is enough. Bolt on a search tool ([qmd](https://github.com/tobi/qmd) is good) only when you outgrow that.
 
+## What v2 added
+
+Schema v2 (current) layers controlled vocabulary and tag-driven indexing on top of v1's link-graph structure. v1 had concept pages (`methods/<slug>.md`, etc.) with hand-curated prose, but the cross-paper relationships hid in prose and degraded as the wiki grew. v2 fixes that with:
+
+- **Controlled vocabulary** in `<wiki>/CLAUDE.md` (four axes: entities / methods / systems / observables) with aliases and parent relationships. Tag drift is the silent killer at scale.
+- **Tag fields in source frontmatter** — every paper page now declares its method/system/observable/entity tags using vocabulary slugs.
+- **`update-index` operation** — auto-regenerates a "Papers using this <axis>" appendix on each concept page (`methods/<slug>.md`, etc.) by scanning all source frontmatter. Manual prose at the top is preserved; the AUTO block is rewritten between `<!-- AUTO:BEGIN -->` / `<!-- AUTO:END -->` markers.
+- **`migrate` operation** — interactive walk that backfills tag fields and AUTO markers on a v1 wiki.
+
+Cross-skill alignment with research-profile: the methods/systems/observables vocabularies should share slugs with research-profile's vocabulary. A single `~/research-vocabulary.yml` can be `include:`d from both wikis.
+
+If you have a v1 wiki, run `migrate` once. If you are starting fresh, `init` ships v2 directly.
+
 ## File layout
 
 ```
@@ -31,7 +44,8 @@ literature-wiki/
 ├── SKILL.md          # canonical body — Claude Code entry (with YAML frontmatter)
 ├── AGENTS.md         # canonical body — Codex CLI entry (no frontmatter, Codex-flavored)
 ├── README.md         # this file
-└── references/       # extended schema/operations docs (created on demand)
+└── templates/
+    └── CLAUDE.md     # vocabulary starter — four axes with example entries
 ```
 
 `SKILL.md` and `AGENTS.md` mirror each other. They are kept in sync by hand because Codex does not support markdown imports yet (open issue [openai/codex#17401](https://github.com/openai/codex/issues/17401)). If you contribute, edit both.
