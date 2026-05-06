@@ -1,0 +1,17 @@
+# macOS / editor / OS junk
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Local-only experiments — anything you do not want in the public repo
+*.local.md
+*.private.md
+local/
+private/
+
+# Python venvs (in case future PRs add tooling)
+.venv/
+__pycache__/
+*.pyc
